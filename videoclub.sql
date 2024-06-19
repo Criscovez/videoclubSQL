@@ -24,19 +24,19 @@ numero varchar(5) not null,
 piso varchar(5) not null
 );
 
-
-alter table direccion 
-add constraint fk_socio_direccion
-foreign key (id_socio)
-references socio(id_socio);
-
 -- Creación de la tabla Prestamo
 create table if not exists prestamo (
 	id_prestamo serial primary key,
 	id_socio int not null,
-	id_pelicula int not null,
+	id_copia int not null,
 	fecha_prestamo date not null,
 	fecha_devolucion date
+);
+
+-- Creación de la tabla Copia
+create table if not exists copia (
+	id_copia serial primary key,
+	id_pelicula integer not null
 );
 
 -- Creación de la tabla Pelicula
@@ -44,10 +44,38 @@ create table if not exists pelicula (
 	id_pelicula serial primary key,
 	titulo varchar(80) not null,
 	año_publicacion varchar(5) null,
-	genero VARCHAR(80) not null,
-	director VARCHAR(100) not null,
+	id_genero integer not null,
+	id_director integer not null,
 	sinopsis VARCHAR(1000) not null	
 );
+
+-- Creación de la tabla Genero
+create table if not exists genero(
+	id_genero serial primary key,
+	tipo varchar(80)
+);
+
+-- Creación de la tabla Director
+create table if not exists director(
+	id_director serial primary key,
+	nombre varchar(100) not null
+);
+
+-- Creación de claves foráneas
+alter table direccion 
+add constraint fk_socio_direccion
+foreign key (id_socio)
+references socio(id_socio);
+
+alter table pelicula
+add constraint fk_genero_pelicula 
+foreign key (id_genero) 
+references genero(id_genero); 
+
+alter table pelicula 
+add constraint fk_director_prestamo 
+foreign key (id_director) 
+references director(id_director);
 
 alter table prestamo 
 add constraint fk_socio_prestamo
@@ -55,11 +83,16 @@ foreign key (id_socio)
 references socio(id_socio);
 
 alter table prestamo 
-add constraint fk_pelicula_prestamo
-foreign key (id_pelicula)
+add constraint fk_copia_prestamo
+foreign key (id_copia)
+references copia(id_copia);
+
+alter table copia
+add constraint fk_pelicula_copia 
+foreign key (id_pelicula) 
 references pelicula(id_pelicula);
 
-
+-- Crea y carga tabla temporal
 CREATE TABLE tmp_videoclub (
 	id_copia int4 NULL,
 	fecha_alquiler_texto date NULL,
@@ -83,6 +116,7 @@ CREATE TABLE tmp_videoclub (
 	fecha_alquiler date NULL,
 	fecha_devolucion date NULL
 );
+
 INSERT INTO tmp_videoclub (id_copia,fecha_alquiler_texto,dni,nombre,apellido_1,apellido_2,email,telefono,codigo_postal,fecha_nacimiento,numero,piso,letra,calle,ext,titulo,genero,sinopsis,director,fecha_alquiler,fecha_devolucion) VALUES
 	 (3,'2024-01-28','1124603H','Ivan','Santana','Medina','ivan.santana.medina@gmail.com','694804631','47007','2005-02-15','6','3','D','Francisco Pizarro','3D','El padrino','Drama','Don Vito Corleone, conocido dentro de los círculos del hampa como ''El Padrino'', es el patriarca de una de las cinco familias que ejercen el mando de la Cosa Nostra en Nueva York en los años cuarenta. Don Corleone tiene cuatro hijos: una chica, Connie, y tres varones; Sonny, Michael y Fredo. Cuando el Padrino reclina intervenir en el negocio de estupefacientes, empieza una cruenta lucha de violentos episodios entre las distintas familias del crimen organizado.','Francis Ford Coppola','2024-01-28',NULL),
 	 (4,'2024-01-30','1396452F','Maria carmen','Crespo','Reyes','maria carmen.crespo.reyes@gmail.com','607425989','47005','2000-11-17','58','1','A','Francisco de Goya','1A','El padrino','Drama','Don Vito Corleone, conocido dentro de los círculos del hampa como ''El Padrino'', es el patriarca de una de las cinco familias que ejercen el mando de la Cosa Nostra en Nueva York en los años cuarenta. Don Corleone tiene cuatro hijos: una chica, Connie, y tres varones; Sonny, Michael y Fredo. Cuando el Padrino reclina intervenir en el negocio de estupefacientes, empieza una cruenta lucha de violentos episodios entre las distintas familias del crimen organizado.','Francis Ford Coppola','2024-01-30','2024-01-31'),
@@ -603,15 +637,30 @@ INSERT INTO tmp_videoclub (id_copia,fecha_alquiler_texto,dni,nombre,apellido_1,a
 	 (308,'2024-01-25','1638778M','Angel','Lorenzo','Caballero','angel.lorenzo.caballero@gmail.com','698073069','47008','2011-07-30','82','1','Izq.','Sol','1Izq.','El bazar de las sorpresas','Comedia','Alfred Kralik es el tímido jefe de vendedores de Matuschek y Compañía, una tienda de Budapest. Todas las mañanas, los empleados esperan juntos la llegada de su jefe, Hugo Matuschek. A pesar de su timidez, Alfred responde al anuncio de un periódico y mantiene un romance por carta. Su jefe decide contratar a una tal Klara Novak en contra de la opinión de Alfred. En el trabajo, Alfred discute constantemente con ella, sin sospechar que es su corresponsal secreta.','Ernst Lubitsch','2024-01-25',NULL);
 
 
-insert into pelicula (id_pelicula, titulo,  genero, director, sinopsis)	
-select distinct tv.id_copia, tv.titulo, tv.genero, tv.director, tv.sinopsis
-from tmp_videoclub tv;
 
+-- Carga datos en tablas
 insert into socio (nombre, apellido_1, apellido_2, fecha_nacimiento, telefono, numero_identificacion)
 select distinct tv.nombre, tv.apellido_1, tv.apellido_2, cast(tv.fecha_nacimiento as date), tv.telefono, tv.dni
 from tmp_videoclub tv;
 
-insert into prestamo (id_socio,id_pelicula,fecha_prestamo,fecha_devolucion)
+insert into director (nombre)
+select distinct director from tmp_videoclub tv;
+
+insert into genero (tipo)
+select distinct genero from tmp_videoclub tv;
+
+insert into pelicula (titulo,  id_genero, id_director, sinopsis)	
+select distinct tv.titulo, g.id_genero, d.id_director, tv.sinopsis
+from tmp_videoclub tv
+inner join genero g on g.tipo = tv.genero
+inner join director d on d.nombre = tv.director;
+
+
+insert into copia (id_copia, id_pelicula)
+select distinct id_copia, p.id_pelicula from tmp_videoclub tv
+inner join pelicula p on p.titulo = tv.titulo;
+
+insert into prestamo (id_socio,id_copia,fecha_prestamo,fecha_devolucion)
 select distinct s.id_socio, tv.id_copia, tv.fecha_alquiler,  tv.fecha_devolucion  from tmp_videoclub tv
 inner join socio s  
 on s.numero_identificacion  = tv.dni;
@@ -622,24 +671,31 @@ inner join socio s
 on s.numero_identificacion  = tv.dni;
 
 -- Películas disponibles para alquilar en este momento (no están prestadas)
-select distinct pe.id_pelicula  , pe.titulo  from prestamo p 
-inner join pelicula pe  on pe.id_pelicula  = p.id_pelicula
-WHERE p.fecha_devolucion  IS not null
-ORDER BY pe.id_pelicula;
+select p.titulo titulos_disponibles, count(c.id_copia) copias from pelicula p
+inner join copia c on p.id_pelicula  = c.id_pelicula 
+left  join prestamo pr on c.id_copia = pr.id_copia and pr.fecha_devolucion is null
+where pr.id_prestamo  is null
+group by p.titulo;
+ 
 
 
 -- Género favorito de cada uno de los socios
-select x1.id_socio, x1.apellido_1, x1.apellido_2, x1.genero 
-from   (select s.id_socio, s.apellido_1, s.apellido_2  , pe.genero, count(pe.genero) conteo  from prestamo p 
-		inner join pelicula pe  on pe.id_pelicula  = p.id_pelicula
+select x1.id_socio, x1.apellido_1, x1.apellido_2, x1.tipo 
+from (select s.id_socio, s.apellido_1, s.apellido_2  , g.tipo, count(g.tipo) conteo  from prestamo p 
+		inner join copia c  on c.id_copia  = p.id_copia
+		inner join pelicula pe  on c.id_pelicula  = pe.id_pelicula
+		inner join genero g  on pe.id_genero  = g.id_genero	
 		inner join socio s on s.id_socio  = p.id_socio
-		group by s.id_socio, s.apellido_1, s.apellido_2, pe.genero) x1
+		group by s.id_socio, s.apellido_1, s.apellido_2, g.tipo
+		order by s.id_socio) x1
 inner join (select x.id_socio, max(x.conteo) conteo 
-			FROM	(select s.id_socio, s.apellido_1, s.apellido_2  , pe.genero, count(pe.genero) conteo  from prestamo p 
-					 inner join pelicula pe  on pe.id_pelicula  = p.id_pelicula
-					 inner join socio s on s.id_socio  = p.id_socio
-					 group by s.id_socio, s.apellido_1, s.apellido_2  , pe.genero
-					 order by s.id_socio) AS x
-			group by x.id_socio) as x2
+from (select s.id_socio, s.apellido_1, s.apellido_2  , g.tipo, count(g.tipo) conteo  from prestamo p 
+		inner join copia c  on c.id_copia  = p.id_copia
+		inner join pelicula pe  on c.id_pelicula  = pe.id_pelicula
+		inner join genero g  on pe.id_genero  = g.id_genero	
+		inner join socio s on s.id_socio  = p.id_socio
+	group by s.id_socio, s.apellido_1, s.apellido_2, g.tipo
+	order by s.id_socio) AS x
+	group by x.id_socio) x2	
 on x1.id_socio = x2.id_socio and x1.conteo = x2.conteo
 order by id_socio
